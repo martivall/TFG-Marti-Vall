@@ -1,19 +1,37 @@
 import plotly.express as px
 import numpy as np
-from dash import Dash, dcc, html
+import dash
+from dash import dcc, html
 from dash.dependencies import Input, Output, State
 from dash_canvas.utils import array_to_data_url, image_string_to_PILImage
 from skimage import io
 import dash_bootstrap_components as dbc
 
 
-app = Dash()
+external_stylesheets = [dbc.themes.BOOTSTRAP, "styles.css"]
+app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
+
+header = [
+    dbc.Card(
+            dbc.CardBody(
+                html.H1("Image segmentation tool based on SAM", className="card-title"),   
+            )  
+    )
+]
 
 segmentation = [
     dbc.Card(
         id="segmentation-card",
         children=[
-            dbc.CardHeader("Viewer"),
+            #dbc.CardHeader("Viewer"),
+            dbc.CardHeader(dcc.Upload(
+                        id='upload-image', 
+                        children=dbc.Button(
+                            'Upload File', 
+                            color="primary",
+                            outline=True), 
+                        multiple=True
+                    )),
             dbc.CardBody(
                 [
                     # Wrap dcc.Loading in a div to force transparency when loading
@@ -75,26 +93,22 @@ segmentation = [
     )
 ]
 
+sidebar = [
+    dbc.Card(
+        id="sidebar-card",
+        children=[
+            dbc.CardHeader("Tools"),
+        ],
+    ),
+]
+
 app.layout = html.Div([
-   
     dbc.Container(
             [
-                dbc.Row( 
-                    dcc.Upload(
-                        id='upload-image', 
-                        children=dbc.Button(
-                            'Upload File', 
-                            color="primary",
-                            outline=True,
-                            size="lg", 
-                            style={"width": "100%"}),
-                        multiple=True
-                    ), 
-                ),
+                dbc.Row(header),
                 dbc.Row(
                     id="app-content",
-                    children=[dbc.Col(segmentation, md=8)]
-                    #children=[dbc.Col(segmentation, md=8), dbc.Col(sidebar, md=4)],
+                    children=[dbc.Col(segmentation, md=8), dbc.Col(sidebar, md=4)],
                 ),
                 #dbc.Row(dbc.Col(meta)),
             ],
@@ -109,9 +123,9 @@ def parse_contents(contents, filename, date):
     pix = np.array(img)
     fig = px.imshow(pix)
     fig.update_layout(template=None)
-    fig.update_xaxes(showgrid=False, showticklabels=False, zeroline=False)
+    fig.update_xaxes(showgrid=False, ticks= '', showticklabels=False, zeroline=False)
     fig.update_yaxes(
-        showgrid=False, scaleanchor="x", showticklabels=False, zeroline=False
+        showgrid=False, scaleanchor="x", ticks= '', showticklabels=False, zeroline=False
     )
     fig.update_layout(dragmode="drawopenpath")
     config = {
@@ -140,4 +154,4 @@ def update_output(list_of_contents, list_of_names, list_of_dates):
     
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run_server()
