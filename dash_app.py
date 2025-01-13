@@ -24,6 +24,11 @@ def parse_contents(contents, filename, date):
     img = image_string_to_PILImage(contents)
     pix = np.array(img)
     fig = px.imshow(pix)
+    fig.update_layout(template=None)
+    fig.update_xaxes(showgrid=False, showticklabels=False, zeroline=False)
+    fig.update_yaxes(
+        showgrid=False, scaleanchor="x", showticklabels=False, zeroline=False
+    )
     fig.update_layout(dragmode="drawrect")
     config = {
         "modeBarButtonsToAdd": [
