@@ -6,6 +6,19 @@ from dash.dependencies import Input, Output, State
 from dash_canvas.utils import array_to_data_url, image_string_to_PILImage
 from skimage import io
 import dash_bootstrap_components as dbc
+import torch
+import cv2
+import supervision as sv
+from segment_anything import SamAutomaticMaskGenerator
+from segment_anything import sam_model_registry
+
+DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+MODEL_TYPE = "vit_b"
+
+sam = sam_model_registry[MODEL_TYPE](checkpoint='sam_vit_b_01ec64.pth')
+sam.to(device=DEVICE)
+
+mask_generator = SamAutomaticMaskGenerator(sam)
 
 
 external_stylesheets = [dbc.themes.BOOTSTRAP, "styles.css"]
@@ -75,8 +88,8 @@ segmentation = [
                                         outline=True,
                                     ),
                                     dbc.Button(
-                                        "Download classifier",
-                                        id="download-button",
+                                        "Try segmentation",
+                                        id="segment-button",
                                         #outline=True,
                                     ),
                                 ],
@@ -119,9 +132,21 @@ app.layout = html.Div([
 ])
 
 def parse_contents(contents, filename, date):
+
     img = image_string_to_PILImage(contents)
     pix = np.array(img)
-    fig = px.imshow(pix)
+    #SAM
+    image_bgr = pix
+    image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
+    result = mask_generator.generate(image_rgb)
+
+    mask_annotator = sv.MaskAnnotator(color_lookup = sv.ColorLookup.INDEX)
+    detections = sv.Detections.from_sam(result)
+    annotated_image = mask_annotator.annotate(image_bgr.copy(), detections)
+
+    
+    #fig = px.imshow(pix)
+    fig = px.imshow(annotated_image)
     fig.update_layout(template=None)
     fig.update_xaxes(showgrid=False, ticks= '', showticklabels=False, zeroline=False)
     fig.update_yaxes(
