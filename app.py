@@ -1,7 +1,7 @@
 import plotly.express as px
 import numpy as np
 import dash
-from dash import dcc, html
+from dash import dcc, html, ctx
 from dash.dependencies import Input, Output, State
 from dash_canvas.utils import array_to_data_url, image_string_to_PILImage
 from skimage import io
@@ -43,7 +43,7 @@ segmentation = [
                             'Upload File', 
                             color="primary",
                             outline=True), 
-                        multiple=True
+                        #multiple=True
                     )),
             dbc.CardBody(
                 [
@@ -131,10 +131,34 @@ app.layout = html.Div([
     #dcc.Graph(figure=fig, config=config)
 ])
 
-def parse_contents(contents, filename, date):
+def parse_contents(contents):
 
     img = image_string_to_PILImage(contents)
     pix = np.array(img)
+    fig = px.imshow(pix)
+    fig.update_layout(template=None)
+    fig.update_xaxes(showgrid=False, ticks= '', showticklabels=False, zeroline=False)
+    fig.update_yaxes(
+        showgrid=False, scaleanchor="x", ticks= '', showticklabels=False, zeroline=False
+    )
+    fig.update_layout(dragmode="drawopenpath")
+    config = {
+        "modeBarButtonsToAdd": [
+            "drawline",
+            "drawopenpath",
+            "drawclosedpath",
+            "drawcircle",
+            "drawrect",
+            "eraseshape",
+        ]
+    }
+    return html.Div([dcc.Graph(figure=fig, config=config)])
+
+def parse_segmentation(contents):
+
+    img = image_string_to_PILImage(contents)
+    pix = np.array(img)
+
     #SAM
     image_bgr = pix
     image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
@@ -144,8 +168,6 @@ def parse_contents(contents, filename, date):
     detections = sv.Detections.from_sam(result)
     annotated_image = mask_annotator.annotate(image_bgr.copy(), detections)
 
-    
-    #fig = px.imshow(pix)
     fig = px.imshow(annotated_image)
     fig.update_layout(template=None)
     fig.update_xaxes(showgrid=False, ticks= '', showticklabels=False, zeroline=False)
@@ -165,18 +187,24 @@ def parse_contents(contents, filename, date):
     }
     return html.Div([dcc.Graph(figure=fig, config=config)])
 
-
 @app.callback(Output('output-image-upload', 'children'),
-              Input('upload-image', 'contents'),
-              State('upload-image', 'filename'),
-              State('upload-image', 'last_modified'))
-def update_output(list_of_contents, list_of_names, list_of_dates):
-    if list_of_contents is not None:
-        children = [
-            parse_contents(c, n, d) for c, n, d in
-            zip(list_of_contents, list_of_names, list_of_dates)]
-        return children
-    
+              Input('segment-button', 'n_clicks'),
+              Input('upload-image', 'contents'))
+              #State('upload-image', 'filename'),
+              #State('upload-image', 'last_modified'))
+def update_output(nclicks, content):
+    if content is not None:
+        if "segment-button" == ctx.triggered_id:
+            print ('Hello, world!')
+            return parse_segmentation(content)
+        
+        else:
+            print ('Hello, noob!')
+            return parse_contents(content) 
+        #    children = [
+        #        parse_segmentation(c, n, d) for c, n, d in
+        #        zip(list_of_contents, list_of_names, list_of_dates)]
+        #    return children
 
 if __name__ == '__main__':
     app.run_server()
