@@ -141,15 +141,17 @@ def parse_contents(contents):
     fig.update_yaxes(
         showgrid=False, scaleanchor="x", ticks= '', showticklabels=False, zeroline=False
     )
-    fig.update_layout(dragmode="drawopenpath")
+    fig.update_layout(dragmode="select")
     config = {
+        'modeBarButtonsToRemove': ['zoom', 'pan'],
         "modeBarButtonsToAdd": [
+            "select",
             "drawline",
             "drawopenpath",
             "drawclosedpath",
             "drawcircle",
             "drawrect",
-            "eraseshape",
+            "eraseshape"
         ]
     }
     return html.Div([dcc.Graph(figure=fig, config=config)])
@@ -174,15 +176,17 @@ def parse_segmentation(contents):
     fig.update_yaxes(
         showgrid=False, scaleanchor="x", ticks= '', showticklabels=False, zeroline=False
     )
-    fig.update_layout(dragmode="drawopenpath")
+    fig.update_layout(dragmode="select")
     config = {
+        'modeBarButtonsToRemove': ['zoom', 'pan'],
         "modeBarButtonsToAdd": [
+            "select",
             "drawline",
             "drawopenpath",
             "drawclosedpath",
             "drawcircle",
             "drawrect",
-            "eraseshape",
+            "eraseshape"
         ]
     }
     return html.Div([dcc.Graph(figure=fig, config=config)])
@@ -190,21 +194,15 @@ def parse_segmentation(contents):
 @app.callback(Output('output-image-upload', 'children'),
               Input('segment-button', 'n_clicks'),
               Input('upload-image', 'contents'))
-              #State('upload-image', 'filename'),
-              #State('upload-image', 'last_modified'))
 def update_output(nclicks, content):
     if content is not None:
         if "segment-button" == ctx.triggered_id:
-            print ('Hello, world!')
             return parse_segmentation(content)
         
         else:
-            print ('Hello, noob!')
             return parse_contents(content) 
-        #    children = [
-        #        parse_segmentation(c, n, d) for c, n, d in
-        #        zip(list_of_contents, list_of_names, list_of_dates)]
-        #    return children
+        
+
 
 if __name__ == '__main__':
     app.run_server()
