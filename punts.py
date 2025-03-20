@@ -117,6 +117,27 @@ def parse_segmentation(contents):
     fig.update_layout(template=None, dragmode="select")
     return fig
 
+def parse_box_segmentation(contents, box):
+    img = image_string_to_PILImage(contents)
+    pix = np.array(img)
+    image_rgb = cv2.cvtColor(pix, cv2.COLOR_BGR2RGB)
+    mask_predictor.set_image(image_rgb)
+    masks, scores, logits = mask_predictor.predict( box=box, multimask_output=True)
+    box_annotator = sv.BoxAnnotator(color=sv.Color.RED, color_lookup=sv.ColorLookup.INDEX)
+    mask_annotator = sv.MaskAnnotator(color=sv.Color.RED, color_lookup=sv.ColorLookup.INDEX)
+    detections = sv.Detections(
+    xyxy=sv.mask_to_xyxy(masks=masks),
+    mask=masks
+    )
+    detections = detections[detections.area == np.max(detections.area)]
+    segmented_image = mask_annotator.annotate(scene=pix.copy(), detections=detections)
+    segmented_image = box_annotator.annotate(scene=segmented_image.copy(), detections=detections)
+    fig = px.imshow(segmented_image)
+    fig.update_xaxes(showgrid=False, ticks= '', showticklabels=False, zeroline=False)
+    fig.update_yaxes(showgrid=False, scaleanchor="x", ticks= '', showticklabels=False, zeroline=False)
+    fig.update_layout(template=None,dragmode="select")
+    return fig
+
 @app.callback(
     Output('stored-figure', 'data'),
     Output('loading-flag', 'data'),
@@ -127,16 +148,21 @@ def parse_segmentation(contents):
 def update_stored_figure(nclicks, content, relayout_data):
     if content is None:
         return {}, False
-
     if ctx.triggered_id == "segment-button":
         loading_flag = True
-        fig = parse_segmentation(content)
+        if "shapes" in relayout_data:
+            last_shape = relayout_data["shapes"][-1]
+            x0, y0 = int(last_shape["x0"]), int(last_shape["y0"])
+            x1, y1 = int(last_shape["x1"]), int(last_shape["y1"])
+            box = np.array([x0, y0, x1, y1])
+            fig = parse_box_segmentation(content, box)
+        else:    
+            fig = parse_segmentation(content)
     elif ctx.triggered_id == "upload-image":
-        loading_flag = True
+        is_loading = True
         fig = parse_contents(content)
     else:
         return {}, False
-
     return fig.to_dict(), False
 
 # Callback para añadir puntos positivos y negativos
