@@ -41,6 +41,7 @@ app.layout = html.Div([
                         dcc.Store(id='stored-figure', data={}),  # Almacena la figura procesada
                         dcc.Store(id='loading-flag', data=False),  # Estado de carga
                         dcc.Store(id='points-data', data={'x': [], 'y': [], 'color': []}),  # Almacena puntos
+                        dcc.Store(id='button-state', data={"positive": False, "negative": False}),
 
                         dcc.Loading(
                             id="segmentations-loading",
@@ -179,30 +180,63 @@ def update_stored_figure(nclicks, content, relayout_data, points_data):
         return {}, False
     return fig.to_dict(), False
 
+@app.callback(
+    Output("button-state", "data"),
+    Input("btn-positive", "n_clicks"),
+    Input("btn-negative", "n_clicks"),
+    State("button-state", "data"),
+    prevent_initial_call=True
+)
+def toggle_buttons(n_clicks_pos, n_clicks_neg, state):
+    ctx = dash.callback_context
+    if not ctx.triggered_id:
+        return state  # No cambiar si no hay interacción
+
+    if ctx.triggered_id == "btn-positive":
+        return {"positive": not state["positive"], "negative": False}  # Activa positivo y desactiva negativo
+    elif ctx.triggered_id == "btn-negative":
+        return {"positive": False, "negative": not state["negative"]}  # Activa negativo y desactiva positivo
+    
+    return state  # No cambiar si no se detecta interacción
+
+@app.callback(
+    Output("btn-positive", "active"),
+    Output("btn-negative", "active"),
+    Input("button-state", "data")
+)
+def update_button_states(button_state):
+    return button_state["positive"], button_state["negative"]
+
 # Callback para añadir puntos positivos y negativos
 @app.callback(
     Output('points-data', 'data'),
     Input('output-image-upload', 'clickData'),
-    State('btn-positive', 'n_clicks'),
-    State('btn-negative', 'n_clicks'),
+    State('button-state', 'data'),  # Obtenemos qué botón está activo
     State('points-data', 'data'),
     prevent_initial_call=True
 )
-def add_point(clickData, n_pos, n_neg, points_data):
+def add_point(clickData, button_state, points_data):
     if not clickData:
-        return dash.no_update
+        return dash.no_update  # No hacer nada si no hay clic
 
     x_click = clickData["points"][0]["x"]
     y_click = clickData["points"][0]["y"]
-    
-    # Convertir color a 0 (rojo) o 1 (verde)
-    color_value = 1 if (n_pos or 0) > (n_neg or 0) else 0
 
+    # Determinar el valor de color según qué botón está activo
+    if button_state["positive"]:
+        color_value = 1  # Verde
+    elif button_state["negative"]:
+        color_value = 0  # Rojo
+    else:
+        return dash.no_update  # Si ningún botón está activo, no hacer nada
+
+    # Agregar el punto con su color correspondiente
     points_data["x"].append(x_click)
     points_data["y"].append(y_click)
     points_data["color"].append(color_value)
 
     return points_data
+
 
 # Callback para actualizar la imagen con los puntos
 @app.callback(
