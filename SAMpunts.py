@@ -74,7 +74,7 @@ app.layout = html.Div([
                         #], size="lg", style={"width": "100%"}),
 
                         dbc.ButtonGroup([
-                            dbc.Button("Download classified image", id="download-image-button", outline=True),
+                            dbc.Button("Download classified image", id="download-image-button", color="secondary"),
                             dbc.Button("Try segmentation", id="segment-button"),
                         ], size="lg", style={"width": "100%"}),
 
@@ -87,8 +87,8 @@ app.layout = html.Div([
                     dbc.CardHeader("Tools"),
                     dbc.CardFooter([
                         dbc.ButtonGroup([
-                            dbc.Button("Punto Positivo", id="btn-positive", color="success", outline=True),
-                            dbc.Button("Punto Negativo", id="btn-negative", color="danger", outline=True),
+                            dbc.Button("Punt Positiu", id="btn-positive", color="success", outline=True),
+                            dbc.Button("Punt Negatiu", id="btn-negative", color="danger", outline=True),
                         ], size="lg", style={"width": "100%"}
                         ),
 
