@@ -92,6 +92,11 @@ app.layout = html.Div([
                         ], size="lg", style={"width": "100%"}
                         ),
 
+                        dcc.Checklist(
+                            id='checklist',
+                            options=['Recàlcul automàtic']
+                        ),
+
                         daq.ColorPicker(
                             id='color-picker',
                             label='Color del traçat',
@@ -144,11 +149,14 @@ def parse_box_segmentation(contents, box, input_points, input_labels):
     mask_predictor.set_image(image_rgb)
     if input_points.size == 0:
         masks, scores, logits = mask_predictor.predict(box=box, multimask_output=False)
-    else:
+    elif box.size == 0:
+        print("box buida")
+        masks, scores, logits = mask_predictor.predict(point_coords=input_points, point_labels=input_labels, multimask_output=False)
         # print(input_points)
         # print(input_labels)
         # print(f"Forma de input_points: {input_points.shape}")
         # print(f"Forma de input_labels: {input_labels.shape}")
+    else:
         masks, scores, logits = mask_predictor.predict(point_coords=input_points, point_labels=input_labels, box=box, multimask_output=False)
     box_annotator = sv.BoxAnnotator(color=sv.Color.RED, color_lookup=sv.ColorLookup.INDEX)
     mask_annotator = sv.MaskAnnotator(color=sv.Color.RED, color_lookup=sv.ColorLookup.INDEX)
@@ -168,9 +176,10 @@ def parse_box_segmentation(contents, box, input_points, input_labels):
     Input('segment-button', 'n_clicks'),
     Input('upload-image', 'contents'),
     State('output-image-upload', 'relayoutData'),
-    State('points-data','data')
+    Input('points-data','data'),
+    State('checklist', 'value')
 )
-def update_stored_figure(nclicks, content, relayout_data, points_data):
+def update_stored_figure(nclicks, content, relayout_data, points_data, check):
     if content is None:
         return {}, False
     if ctx.triggered_id == "segment-button":
@@ -192,10 +201,28 @@ def update_stored_figure(nclicks, content, relayout_data, points_data):
             fig = parse_box_segmentation(content, box, input_points, input_labels)
         else:    
             fig = parse_segmentation(content)
+    elif ctx.triggered_id == "points-data":
+        print(check)
+        if check == ['Recàlcul automàtic']:
+            print("Hello")
+            box = np.array([])
+            input_points = np.empty((0, 2), dtype=int)  # Array vacío con forma (N,2) para coordenadas
+            input_labels = np.empty((0,), dtype=int)  # Array vacío con forma (N,) para etiquetas
+            for x, y, color in zip(points_data["x"], points_data["y"], points_data["color"]):
+                point = np.array([[int(x), int(y)]])  # Convertir x, y a enteros
+                label = np.array(int(color))  # Convertir color a entero (0 o 1)
+
+                input_points = np.vstack((input_points, point))  
+                input_labels = np.append(input_labels, label)  
+            fig = parse_box_segmentation(content, box, input_points, input_labels)
+        else:
+            fig = parse_contents(content)
     elif ctx.triggered_id == "upload-image":
+        print("Hello upload")
         is_loading = True
         fig = parse_contents(content)
     else:
+        print("else")
         return {}, False
     return fig.to_dict(), False
 
@@ -268,6 +295,7 @@ def add_point(clickData, button_state, points_data):
 )
 def update_graph(stored_data, points_data, color_value, line_width, is_loading):
     if not stored_data or is_loading:
+        print("nodata")
         return dash.no_update
 
     fig = go.Figure(stored_data)
