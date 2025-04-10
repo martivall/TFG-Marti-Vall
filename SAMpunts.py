@@ -37,10 +37,22 @@ app.layout = html.Div([
         dbc.Row([
             dbc.Col([
                 dbc.Card([
-                    dbc.CardHeader(dcc.Upload(
-                        id='upload-image',
-                        children=dbc.Button('Upload File', color="primary", outline=True),
-                    )),
+                    dbc.CardHeader(
+                        dbc.Row([
+                            dbc.Col(
+                                dcc.Upload(
+                                    id='upload-image',
+                                    children=dbc.Button('Upload File', color="primary", outline=True),
+                                ),
+                                width="auto"
+                            ),
+                            dbc.Col(
+                                dbc.Button('Overwrite Image', id='overwrite-image-button', color="danger", outline=True),
+                                width="auto"
+                            ),
+                        ], justify="between")
+                    ),
+
                     dbc.CardBody([
                         dcc.Store(id='stored-figure', data={}),  # Almacena la figura procesada
                         dcc.Store(id='loading-flag', data=False),  # Estado de carga
@@ -89,6 +101,7 @@ app.layout = html.Div([
                         dbc.ButtonGroup([
                             dbc.Button("Punt Positiu", id="btn-positive", color="success", outline=True),
                             dbc.Button("Punt Negatiu", id="btn-negative", color="danger", outline=True),
+                            dbc.Button("Clean All", id="btn-clean", color="secondary", outline=True),
                         ], size="lg", style={"width": "100%"}
                         ),
 
@@ -120,7 +133,7 @@ app.layout = html.Div([
 
 # Funciones para procesar imágenes
 def parse_contents(contents):
-    img = image_string_to_PILImage(contents)
+    img = image_string_to_PILImage(contents).convert("RGB")
     pix = np.array(img)
     fig = px.imshow(pix)
     fig.update_xaxes(showgrid=False, ticks='', showticklabels=False, zeroline=False)
@@ -129,7 +142,7 @@ def parse_contents(contents):
     return fig
 
 def parse_segmentation(contents):
-    img = image_string_to_PILImage(contents)
+    img = image_string_to_PILImage(contents).convert("RGB")
     pix = np.array(img)
     image_rgb = cv2.cvtColor(pix, cv2.COLOR_BGR2RGB)
     result = mask_generator.generate(image_rgb)
@@ -143,7 +156,7 @@ def parse_segmentation(contents):
     return fig
 
 def parse_box_segmentation(contents, box, input_points, input_labels):
-    img = image_string_to_PILImage(contents)
+    img = image_string_to_PILImage(contents).convert("RGB")
     pix = np.array(img)
     image_rgb = cv2.cvtColor(pix, cv2.COLOR_BGR2RGB)
     mask_predictor.set_image(image_rgb)
@@ -158,12 +171,12 @@ def parse_box_segmentation(contents, box, input_points, input_labels):
         # print(f"Forma de input_labels: {input_labels.shape}")
     else:
         masks, scores, logits = mask_predictor.predict(point_coords=input_points, point_labels=input_labels, box=box, multimask_output=False)
-    box_annotator = sv.BoxAnnotator(color=sv.Color.RED, color_lookup=sv.ColorLookup.INDEX)
+    #box_annotator = sv.BoxAnnotator(color=sv.Color.RED, color_lookup=sv.ColorLookup.INDEX)
     mask_annotator = sv.MaskAnnotator(color=sv.Color.RED, color_lookup=sv.ColorLookup.INDEX)
     detections = sv.Detections(xyxy=sv.mask_to_xyxy(masks=masks),mask=masks)
     detections = detections[detections.area == np.max(detections.area)]
     segmented_image = mask_annotator.annotate(scene=pix.copy(), detections=detections)
-    segmented_image = box_annotator.annotate(scene=segmented_image.copy(), detections=detections)
+    #segmented_image = box_annotator.annotate(scene=segmented_image.copy(), detections=detections)
     fig = px.imshow(segmented_image)
     fig.update_xaxes(showgrid=False, ticks= '', showticklabels=False, zeroline=False)
     fig.update_yaxes(showgrid=False, scaleanchor="x", ticks= '', showticklabels=False, zeroline=False)
@@ -349,7 +362,7 @@ def update_draw_color(stored_data, color_value, line_width):
 
     return fig
 """
-
+# Callback para descargar la imagen
 @app.callback(
     Output('download-image', 'data'),
     Input('download-image-button', 'n_clicks'),
@@ -387,9 +400,67 @@ def save_image(n_clicks, stored_data, relayout_data):
                 )
 
     # Convertir a imagen (PNG)
-    img_bytes = pio.to_image(fig, format="png")
+    fig.update_layout(
+        margin=dict(l=0, r=0, t=0, b=0),  # Quitar todos los márgenes
+        paper_bgcolor='rgba(0,0,0,0)',    # Fondo completamente transparente
+        plot_bgcolor='rgba(0,0,0,0)',     # Fondo del gráfico transparente
+    )
 
-    return dcc.send_bytes(img_bytes, filename="imagen_sin_puntos.png")
+    img_bytes = pio.to_image(fig, format="png", width=fig.layout.width, height=fig.layout.height)
+
+    #img_bytes = pio.to_image(fig, format="png")
+
+    return dcc.send_bytes(img_bytes, filename="imagen.png")
+
+
+# Callback para actualizar la imagen con los trazados
+@app.callback(
+    Output('upload-image', 'contents'),
+    Input('overwrite-image-button', 'n_clicks'),
+    State('upload-image', 'contents'),  # <- usamos esta como base
+    State('output-image-upload', 'relayoutData'),
+    prevent_initial_call=True
+)
+def overwrite_image(n_clicks, original_contents, relayout_data):
+    if not original_contents:
+        return dash.no_update
+
+    # Cargar imagen original, sin segmentaciones
+    img = image_string_to_PILImage(original_contents).convert("RGB")
+    pix = np.array(img)
+
+    # Crear figura base desde la imagen original
+    fig = px.imshow(pix)
+    fig.update_xaxes(showgrid=False, ticks='', showticklabels=False, zeroline=False)
+    fig.update_yaxes(showgrid=False, scaleanchor="x", ticks='', showticklabels=False, zeroline=False)
+    fig.update_layout(
+        margin=dict(l=0, r=0, t=0, b=0),
+        paper_bgcolor='white',
+        plot_bgcolor='white',
+        dragmode="select"
+    )
+
+    # Agregar SOLO los trazados dibujados por el usuario
+    if relayout_data and "shapes" in relayout_data:
+        for shape in relayout_data["shapes"]:
+            if shape["type"] == "line":
+                fig.add_shape(
+                    type="line",
+                    x0=shape["x0"], y0=shape["y0"],
+                    x1=shape["x1"], y1=shape["y1"],
+                    line=dict(color=shape["line"]["color"], width=shape["line"]["width"])
+                )
+            elif shape["type"] == "path":
+                fig.add_shape(
+                    type="path",
+                    path=shape["path"],
+                    line=dict(color=shape["line"]["color"], width=shape["line"]["width"])
+                )
+
+    # Exportar figura como imagen (png)
+    img_bytes = pio.to_image(fig, format="png")
+    base64_img = base64.b64encode(img_bytes).decode('utf-8')
+    return f"data:image/png;base64,{base64_img}"
 
 # Ejecutar la aplicación
 if __name__ == '__main__':
