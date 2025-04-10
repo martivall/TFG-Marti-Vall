@@ -217,17 +217,18 @@ def update_stored_figure(nclicks, content, relayout_data, points_data, check):
     elif ctx.triggered_id == "points-data":
         print(check)
         if check == ['Recàlcul automàtic']:
-            print("Hello")
-            box = np.array([])
-            input_points = np.empty((0, 2), dtype=int)  # Array vacío con forma (N,2) para coordenadas
-            input_labels = np.empty((0,), dtype=int)  # Array vacío con forma (N,) para etiquetas
-            for x, y, color in zip(points_data["x"], points_data["y"], points_data["color"]):
-                point = np.array([[int(x), int(y)]])  # Convertir x, y a enteros
-                label = np.array(int(color))  # Convertir color a entero (0 o 1)
-
-                input_points = np.vstack((input_points, point))  
-                input_labels = np.append(input_labels, label)  
-            fig = parse_box_segmentation(content, box, input_points, input_labels)
+            if not points_data["x"]:  
+                fig = parse_contents(content)
+            else:
+                box = np.array([])
+                input_points = np.empty((0, 2), dtype=int)  # Array vacío con forma (N,2) para coordenadas
+                input_labels = np.empty((0,), dtype=int)  # Array vacío con forma (N,) para etiquetas
+                for x, y, color in zip(points_data["x"], points_data["y"], points_data["color"]):
+                    point = np.array([[int(x), int(y)]])  # Convertir x, y a enteros
+                    label = np.array(int(color))  # Convertir color a entero (0 o 1)
+                    input_points = np.vstack((input_points, point))  
+                    input_labels = np.append(input_labels, label)  
+                fig = parse_box_segmentation(content, box, input_points, input_labels)
         else:
             fig = parse_contents(content)
     elif ctx.triggered_id == "upload-image":
@@ -270,31 +271,35 @@ def update_button_states(button_state):
 @app.callback(
     Output('points-data', 'data'),
     Input('output-image-upload', 'clickData'),
-    State('button-state', 'data'),  # Obtenemos qué botón está activo
+    Input('btn-clean', 'n_clicks'),  # Nuevo botón de limpieza
+    State('button-state', 'data'),
     State('points-data', 'data'),
     prevent_initial_call=True
 )
-def add_point(clickData, button_state, points_data):
-    if not clickData:
-        return dash.no_update  # No hacer nada si no hay clic
+def update_points(clickData, clean_click, button_state, points_data):
+    triggered_id = ctx.triggered_id  # ctx = dash.callback_context en versiones nuevas
 
-    x_click = clickData["points"][0]["x"]
-    y_click = clickData["points"][0]["y"]
+    if triggered_id == 'btn-clean':
+        return {"x": [], "y": [], "color": []}
 
-    # Determinar el valor de color según qué botón está activo
-    if button_state["positive"]:
-        color_value = 1  # Verde
-    elif button_state["negative"]:
-        color_value = 0  # Rojo
-    else:
-        return dash.no_update  # Si ningún botón está activo, no hacer nada
+    if triggered_id == 'output-image-upload' and clickData:
+        x_click = clickData["points"][0]["x"]
+        y_click = clickData["points"][0]["y"]
 
-    # Agregar el punto con su color correspondiente
-    points_data["x"].append(x_click)
-    points_data["y"].append(y_click)
-    points_data["color"].append(color_value)
+        if button_state["positive"]:
+            color_value = 1
+        elif button_state["negative"]:
+            color_value = 0
+        else:
+            return dash.no_update  # Ningún botón activo
 
-    return points_data
+        points_data["x"].append(x_click)
+        points_data["y"].append(y_click)
+        points_data["color"].append(color_value)
+
+        return points_data
+
+    return dash.no_update
 
 
 # Callback para actualizar la imagen con los puntos
