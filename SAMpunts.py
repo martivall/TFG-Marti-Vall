@@ -66,6 +66,7 @@ app.layout = html.Div([
                         dcc.Store(id='button-state', data={"positive": False, "negative": False}),
                         dcc.Store(id='mask-bitmap', data=None), 
                         dcc.Store(id='segmentation-gallery', data=[]),
+                        dcc.Store(id='selected-mask', data=None),
 
                         dcc.Loading(
                             id="segmentations-loading",
@@ -147,13 +148,25 @@ app.layout = html.Div([
             dbc.ModalHeader("Segmentación Ampliada"),
             dbc.ModalBody(html.Img(id="enlarged-segmentation", style={"width": "100%"})),
             dbc.ModalFooter(
-                dbc.Button("Cerrar", id="close-modal", className="ml-auto")
+                dbc.Row([
+                    dbc.Col(
+                        dbc.Button("Descargar", id="download-selected-mask-button", color="primary", className="me-2"),
+                        width="auto"
+                    ),
+                    dbc.Col(
+                        dbc.Button("Cerrar", id="close-modal", className="ml-auto"),
+                        width="auto"
+                    ),
+                ])
             ),
         ],
         id="modal-segmentation",
         size="lg",
         is_open=False,
         ),
+
+        dcc.Download(id="download-selected-mask"),
+
     ], fluid=True)
 ])
 
@@ -415,6 +428,7 @@ def update_thumbnail_gallery(gallery):
 @app.callback(
     Output("modal-segmentation", "is_open"),
     Output("enlarged-segmentation", "src"),
+    Output("selected-mask", "data"), 
     Input({'type': 'thumbnail', 'index': ALL}, 'n_clicks'),
     Input("close-modal", "n_clicks"),
     State('segmentation-gallery', 'data'),
@@ -427,12 +441,30 @@ def toggle_modal(thumbnail_clicks, close_click, gallery, is_open):
     if isinstance(ctx_id, dict) and ctx_id.get("type") == "thumbnail":
         clicked_index = ctx_id.get("index")
         if gallery and 0 <= clicked_index < len(gallery) and thumbnail_clicks[clicked_index] > 0:
-            return True, gallery[clicked_index]
+            return True, gallery[clicked_index], gallery[clicked_index]
 
     elif ctx_id == "close-modal":
-        return False, dash.no_update
+        return False, dash.no_update, dash.no_update
 
-    return is_open, dash.no_update
+    return is_open, dash.no_update, dash.no_update
+
+
+# Callback para la descarga del modal
+@app.callback(
+    Output("download-selected-mask", "data"),
+    Input("download-selected-mask-button", "n_clicks"),
+    State("selected-mask", "data"),
+    prevent_initial_call=True
+)
+def download_selected_mask(n_clicks, mask_src):
+    if not mask_src:
+        return dash.no_update
+
+    # Quitar el encabezado base64
+    header, base64_data = mask_src.split(",", 1)
+    img_bytes = base64.b64decode(base64_data)
+
+    return dcc.send_bytes(img_bytes, filename="selected_mask.png")
 
 
 # Callback para descargar la máscara
