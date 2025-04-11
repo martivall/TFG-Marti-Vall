@@ -64,6 +64,7 @@ app.layout = html.Div([
                         dcc.Store(id='mask-bitmap', data=None), 
                         dcc.Store(id='segmentation-gallery', data=[]),
                         dcc.Store(id='selected-mask', data=None),
+                        dcc.Store(id='alternative-masks', data=[]),
 
                         dcc.Loading(
                             id="segmentations-loading",
@@ -108,7 +109,11 @@ app.layout = html.Div([
 
                         dcc.Download(id="download-image"),
                     ]),
-                ])
+                ]),
+                dbc.Card([
+                    dbc.CardHeader("Alternative Masks"),
+                    dbc.CardBody(id="alternative-masks-thumbnails")
+                ], className="mt-3"),
             ], md=8),
             dbc.Col([
                 dbc.Card([
@@ -204,38 +209,59 @@ def parse_segmentation(contents):
     fig.update_layout(template=None, dragmode="select")
     return fig
 
-def parse_box_segmentation(contents, box, input_points, input_labels):
+def parse_box_segmentation(contents, box, input_points, input_labels, return_all_masks=False):
     img = image_string_to_PILImage(contents).convert("RGB")
     pix = np.array(img)
     image_rgb = cv2.cvtColor(pix, cv2.COLOR_BGR2RGB)
     mask_predictor.set_image(image_rgb)
-    if input_points.size == 0:
-        masks, scores, logits = mask_predictor.predict(box=box, multimask_output=False)
-    elif box.size == 0:
-        masks, scores, logits = mask_predictor.predict(point_coords=input_points, point_labels=input_labels, multimask_output=False)
-        # print(input_points)
-        # print(input_labels)
-        # print(f"Forma de input_points: {input_points.shape}")
-        # print(f"Forma de input_labels: {input_labels.shape}")
-    else:
-        masks, scores, logits = mask_predictor.predict(point_coords=input_points, point_labels=input_labels, box=box, multimask_output=False)
-    #box_annotator = sv.BoxAnnotator(color=sv.Color.RED, color_lookup=sv.ColorLookup.INDEX)
+
+    masks, scores, logits = mask_predictor.predict(
+        box=box if box.size > 0 else None,
+        point_coords=input_points if input_points.size > 0 else None,
+        point_labels=input_labels if input_labels.size > 0 else None,
+        multimask_output=True
+    )
+
+    if return_all_masks:
+        alternative_thumbnails = []
+        for i, m in enumerate(masks):
+            if m.ndim == 3:
+                mask = m[0]
+            else:
+                mask = m
+
+            mask_img = Image.fromarray((mask * 255).astype(np.uint8))
+            buf = io.BytesIO()
+            mask_img.save(buf, format="PNG")
+            base64_img = base64.b64encode(buf.getvalue()).decode('utf-8')
+            alternative_thumbnails.append({
+                "src": f"data:image/png;base64,{base64_img}",
+                "score": float(scores[i])
+            })
+        
+        alternative_thumbnails.sort(key=lambda x: x['score'], reverse=True)
+
+        return masks, scores, alternative_thumbnails
+
     mask_annotator = sv.MaskAnnotator(color=sv.Color.RED, color_lookup=sv.ColorLookup.INDEX)
-    detections = sv.Detections(xyxy=sv.mask_to_xyxy(masks=masks),mask=masks)
+    detections = sv.Detections(xyxy=sv.mask_to_xyxy(masks=masks), mask=masks)
     detections = detections[detections.area == np.max(detections.area)]
     mask = detections.mask[0] 
     segmented_image = mask_annotator.annotate(scene=pix.copy(), detections=detections)
-    #segmented_image = box_annotator.annotate(scene=segmented_image.copy(), detections=detections)
+
     fig = px.imshow(segmented_image)
     fig.update_xaxes(showgrid=False, ticks= '', showticklabels=False, zeroline=False)
     fig.update_yaxes(showgrid=False, scaleanchor="x", ticks= '', showticklabels=False, zeroline=False)
-    fig.update_layout(template=None,dragmode="select")
+    fig.update_layout(template=None, dragmode="select")
+
     return fig, mask
+
 
 @app.callback(
     Output('stored-figure', 'data'),
     Output('loading-flag', 'data'),
-    Output('mask-bitmap', 'data'), 
+    Output('mask-bitmap', 'data'),
+    Output('alternative-masks', 'data'),
     Input('segment-button', 'n_clicks'),
     Input('upload-image', 'contents'),
     State('output-image-upload', 'relayoutData'),
@@ -244,7 +270,8 @@ def parse_box_segmentation(contents, box, input_points, input_labels):
 )
 def update_stored_figure(nclicks, content, relayout_data, points_data, check):
     if content is None:
-        return {}, False, None
+        return {}, False, None, []
+
     if ctx.triggered_id == "segment-button":
         loading_flag = True
         if "shapes" in relayout_data:
@@ -252,44 +279,88 @@ def update_stored_figure(nclicks, content, relayout_data, points_data, check):
             x0, y0 = int(last_shape["x0"]), int(last_shape["y0"])
             x1, y1 = int(last_shape["x1"]), int(last_shape["y1"])
             box = np.array([x0, y0, x1, y1])
-            input_points = np.empty((0, 2), dtype=int)  # Array vacío con forma (N,2) para coordenadas
-            input_labels = np.empty((0,), dtype=int)  # Array vacío con forma (N,) para etiquetas
-            if points_data["x"]:
-                for x, y, color in zip(points_data["x"], points_data["y"], points_data["color"]):
-                    point = np.array([[int(x), int(y)]])  # Convertir x, y a enteros
-                    label = np.array(int(color))  # Convertir color a entero (0 o 1)
 
-                    input_points = np.vstack((input_points, point))  
-                    input_labels = np.append(input_labels, label)  
-            fig, mask = parse_box_segmentation(content, box, input_points, input_labels)
-        else:    
+            input_points = np.array([[int(x), int(y)] for x, y in zip(points_data["x"], points_data["y"])]).reshape(-1, 2)
+            input_labels = np.array([int(c) for c in points_data["color"]])
+
+            masks, scores, alternative_thumbnails = parse_box_segmentation(
+                content, box, input_points, input_labels, return_all_masks=True
+            )
+
+            selected_mask = masks[np.argmax(scores)]
+
+            # Generar figura con la mejor máscara
+            mask_annotator = sv.MaskAnnotator(color=sv.Color.RED, color_lookup=sv.ColorLookup.INDEX)
+            detections = sv.Detections(xyxy=sv.mask_to_xyxy(masks=masks), mask=masks)
+            detections = detections[detections.area == np.max(detections.area)]
+            segmented_image = mask_annotator.annotate(scene=np.array(image_string_to_PILImage(content)), detections=detections)
+
+            fig = px.imshow(segmented_image)
+            fig.update_xaxes(showgrid=False, ticks= '', showticklabels=False, zeroline=False)
+            fig.update_yaxes(showgrid=False, scaleanchor="x", ticks= '', showticklabels=False, zeroline=False)
+            fig.update_layout(template=None, dragmode="select")
+        else:
             fig = parse_segmentation(content)
-            mask = None
+            selected_mask = None
+            alternative_thumbnails = []
     elif ctx.triggered_id == "points-data":
         if check == ['Recàlcul automàtic']:
-            if not points_data["x"]:  
+            if not points_data["x"]:
                 fig = parse_contents(content)
-                return fig.to_dict(), False, None
+                return fig.to_dict(), False, None, []
             else:
                 box = np.array([])
-                input_points = np.empty((0, 2), dtype=int)  # Array vacío con forma (N,2) para coordenadas
-                input_labels = np.empty((0,), dtype=int)  # Array vacío con forma (N,) para etiquetas
-                for x, y, color in zip(points_data["x"], points_data["y"], points_data["color"]):
-                    point = np.array([[int(x), int(y)]])  # Convertir x, y a enteros
-                    label = np.array(int(color))  # Convertir color a entero (0 o 1)
-                    input_points = np.vstack((input_points, point))  
-                    input_labels = np.append(input_labels, label)  
-                fig, mask = parse_box_segmentation(content, box, input_points, input_labels)
+                input_points = np.array([[int(x), int(y)] for x, y in zip(points_data["x"], points_data["y"])]).reshape(-1, 2)
+                input_labels = np.array([int(c) for c in points_data["color"]])
+                masks, scores, alternative_thumbnails = parse_box_segmentation(
+                    content, box, input_points, input_labels, return_all_masks=True
+                )
+                selected_mask = masks[np.argmax(scores)]
+
+                mask_annotator = sv.MaskAnnotator(color=sv.Color.RED, color_lookup=sv.ColorLookup.INDEX)
+                detections = sv.Detections(xyxy=sv.mask_to_xyxy(masks=masks), mask=masks)
+                detections = detections[detections.area == np.max(detections.area)]
+                segmented_image = mask_annotator.annotate(scene=np.array(image_string_to_PILImage(content)), detections=detections)
+
+                fig = px.imshow(segmented_image)
+                fig.update_xaxes(showgrid=False, ticks= '', showticklabels=False, zeroline=False)
+                fig.update_yaxes(showgrid=False, scaleanchor="x", ticks= '', showticklabels=False, zeroline=False)
+                fig.update_layout(template=None, dragmode="select")
         else:
             fig = parse_contents(content)
-            mask = None
+            selected_mask = None
+            alternative_thumbnails = []
     elif ctx.triggered_id == "upload-image":
-        is_loading = True
         fig = parse_contents(content)
-        mask = None
+        selected_mask = None
+        alternative_thumbnails = []
     else:
-        return {}, False, None
-    return fig.to_dict(), False, mask.tolist() if mask is not None else None
+        return {}, False, None, []
+
+    return fig.to_dict(), False, selected_mask.tolist() if selected_mask is not None else None, alternative_thumbnails
+
+
+@app.callback(
+    Output('alternative-masks-thumbnails', 'children'),
+    Input('alternative-masks', 'data')
+)
+def update_alt_thumbnails(gallery):
+    if not gallery:
+        return html.P("No alternative masks.")
+
+    return html.Div([
+        html.Div([
+            html.Img(
+                src=item["src"],
+                id={'type': 'alt-thumbnail', 'index': i},
+                n_clicks=0,
+                style={"height": "100px", "border": "1px solid #ccc", "cursor": "pointer", "display": "block", "marginBottom": "5px"}
+            ),
+            html.Small(f"Score: {item['score']:.3f}", style={"display": "block", "textAlign": "center"})
+        ],
+        style={"margin": "5px", "textAlign": "center"})
+        for i, item in enumerate(gallery)
+    ], style={"display": "flex", "flexWrap": "wrap"})
 
 
 @app.callback(
@@ -438,21 +509,28 @@ def update_thumbnail_gallery(gallery):
 @app.callback(
     Output("modal-segmentation", "is_open"),
     Output("enlarged-segmentation", "src"),
-    Output("selected-mask", "data"), 
+    Output("selected-mask", "data"),
     Input({'type': 'thumbnail', 'index': ALL}, 'n_clicks'),
+    Input({'type': 'alt-thumbnail', 'index': ALL}, 'n_clicks'),
     State('segmentation-gallery', 'data'),
+    State('alternative-masks', 'data'),
     State("modal-segmentation", "is_open"),
     prevent_initial_call=True
 )
-def toggle_modal(thumbnail_clicks, gallery, is_open):
+def toggle_modal(thumbnail_clicks, alt_clicks, gallery, alt_gallery, is_open):
     ctx_id = ctx.triggered_id
 
-    if isinstance(ctx_id, dict) and ctx_id.get("type") == "thumbnail":
-        clicked_index = ctx_id.get("index")
-        if gallery and 0 <= clicked_index < len(gallery) and thumbnail_clicks[clicked_index] > 0:
-            return True, gallery[clicked_index], gallery[clicked_index]
+    if isinstance(ctx_id, dict):
+        idx = ctx_id.get("index")
+        if ctx_id.get("type") == "thumbnail" and 0 <= idx < len(gallery):
+            if thumbnail_clicks[idx] > 0:
+                return True, gallery[idx], gallery[idx]
+        elif ctx_id.get("type") == "alt-thumbnail" and 0 <= idx < len(alt_gallery):
+            if alt_clicks[idx] > 0:
+                return True, alt_gallery[idx]["src"], alt_gallery[idx]["src"]
 
     return is_open, dash.no_update, dash.no_update
+
 
 
 # Callback para la descarga del modal
