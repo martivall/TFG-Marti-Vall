@@ -290,11 +290,13 @@ def update_stored_figure(nclicks, content, relayout_data, points_data, check):
             selected_mask = masks[np.argmax(scores)]
 
             # Generar figura con la mejor máscara
+            img = image_string_to_PILImage(content).convert("RGB")
+            pix = np.array(img)
             mask_annotator = sv.MaskAnnotator(color=sv.Color.RED, color_lookup=sv.ColorLookup.INDEX)
             #detections = sv.Detections(xyxy=sv.mask_to_xyxy(masks=masks), mask=masks)
             #detections = detections[detections.area == np.max(detections.area)]
             detections = sv.Detections(xyxy=sv.mask_to_xyxy(masks=np.expand_dims(selected_mask, axis=0)), mask=np.expand_dims(selected_mask, axis=0))
-            segmented_image = mask_annotator.annotate(scene=np.array(image_string_to_PILImage(content)), detections=detections)
+            segmented_image = mask_annotator.annotate(scene=pix.copy(), detections=detections)
 
             fig = px.imshow(segmented_image)
             fig.update_xaxes(showgrid=False, ticks= '', showticklabels=False, zeroline=False)
@@ -318,11 +320,13 @@ def update_stored_figure(nclicks, content, relayout_data, points_data, check):
                 )
                 selected_mask = masks[np.argmax(scores)]
 
+                img = image_string_to_PILImage(content).convert("RGB")
+                pix = np.array(img)
                 mask_annotator = sv.MaskAnnotator(color=sv.Color.RED, color_lookup=sv.ColorLookup.INDEX)
                 #detections = sv.Detections(xyxy=sv.mask_to_xyxy(masks=masks), mask=masks)
                 #detections = detections[detections.area == np.max(detections.area)]
                 detections = sv.Detections(xyxy=sv.mask_to_xyxy(masks=np.expand_dims(selected_mask, axis=0)), mask=np.expand_dims(selected_mask, axis=0))
-                segmented_image = mask_annotator.annotate(scene=np.array(image_string_to_PILImage(content)), detections=detections)
+                segmented_image = mask_annotator.annotate(scene=pix.copy(), detections=detections)
 
                 fig = px.imshow(segmented_image)
                 fig.update_xaxes(showgrid=False, ticks= '', showticklabels=False, zeroline=False)
