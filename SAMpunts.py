@@ -159,12 +159,12 @@ app.layout = html.Div([
                     
         ]),
         dbc.Modal([
-            dbc.ModalHeader("Segmentación Ampliada"),
+            dbc.ModalHeader("Enlarged segmentation"),
             dbc.ModalBody(html.Img(id="enlarged-segmentation", style={"width": "100%"})),
             dbc.ModalFooter(
                 dbc.Row([
                     dbc.Col(
-                        dbc.Button("Descargar", id="download-selected-mask-button", color="primary", className="me-2"),
+                        dbc.Button("Download", id="download-selected-mask-button", color="primary", className="me-2"),
                         width="auto"
                     )
                 ])
@@ -589,7 +589,12 @@ def overwrite_image(n_clicks, original_contents, relayout_data):
                 )
 
     # Exportar figura como imagen (png)
-    img_bytes = pio.to_image(fig, format="png")
+    img_bytes = pio.to_image(
+    fig,
+    format="png",
+    width=pix.shape[1],  # Ancho original
+    height=pix.shape[0]  # Alto original
+    )
     base64_img = base64.b64encode(img_bytes).decode('utf-8')
     return f"data:image/png;base64,{base64_img}"
 
