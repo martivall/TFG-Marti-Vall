@@ -3,6 +3,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
 import dash
+from dash import ALL
 from dash import dcc, html, ctx
 from dash.dependencies import Input, Output, State
 from dash_canvas.utils import array_to_data_url, image_string_to_PILImage
@@ -142,6 +143,17 @@ app.layout = html.Div([
             ], md=4),
                     
         ]),
+        dbc.Modal([
+            dbc.ModalHeader("Segmentación Ampliada"),
+            dbc.ModalBody(html.Img(id="enlarged-segmentation", style={"width": "100%"})),
+            dbc.ModalFooter(
+                dbc.Button("Cerrar", id="close-modal", className="ml-auto")
+            ),
+        ],
+        id="modal-segmentation",
+        size="lg",
+        is_open=False,
+        ),
     ], fluid=True)
 ])
 
@@ -389,9 +401,38 @@ def update_thumbnail_gallery(gallery):
         return html.P("No saved segmentations yet.")
     
     return html.Div([
-        html.Img(src=img_src, style={"height": "100px", "margin": "5px", "border": "1px solid #ccc"})
-        for img_src in gallery
+        html.Img(
+            src=img_src,
+            id={'type': 'thumbnail', 'index': i},
+            n_clicks=0,
+            style={"height": "100px", "margin": "5px", "border": "1px solid #ccc", "cursor": "pointer"}
+        )
+        for i, img_src in enumerate(gallery)
     ], style={"display": "flex", "flexWrap": "wrap"})
+
+
+# Callback para abrir el modal con la imagen clicada
+@app.callback(
+    Output("modal-segmentation", "is_open"),
+    Output("enlarged-segmentation", "src"),
+    Input({'type': 'thumbnail', 'index': ALL}, 'n_clicks'),
+    Input("close-modal", "n_clicks"),
+    State('segmentation-gallery', 'data'),
+    State("modal-segmentation", "is_open"),
+    prevent_initial_call=True
+)
+def toggle_modal(thumbnail_clicks, close_click, gallery, is_open):
+    ctx_id = ctx.triggered_id
+
+    if isinstance(ctx_id, dict) and ctx_id.get("type") == "thumbnail":
+        clicked_index = ctx_id.get("index")
+        if gallery and 0 <= clicked_index < len(gallery) and thumbnail_clicks[clicked_index] > 0:
+            return True, gallery[clicked_index]
+
+    elif ctx_id == "close-modal":
+        return False, dash.no_update
+
+    return is_open, dash.no_update
 
 
 # Callback para descargar la máscara
