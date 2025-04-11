@@ -48,15 +48,12 @@ app.layout = html.Div([
                                 ),
                                 width="auto"
                             ),
-                            dbc.Col(
-                                dbc.Button('Save Current Segmentation', id='save-segmentation-button', color="success", outline=True),
-                                width="auto"
-                            ),
-                            dbc.Col(
+                            dbc.Col(width=True),
+                            dbc.Col([
+                                dbc.Button('Save Current Segmentation', id='save-segmentation-button', color="success", className="me-2", outline=True),
                                 dbc.Button('Overwrite Image', id='overwrite-image-button', color="danger", outline=True),
-                                width="auto"
-                            ),
-                        ], justify="between")
+                            ], width="auto"),
+                        ], align="center")
                     ),
 
                     dbc.CardBody([
@@ -94,11 +91,18 @@ app.layout = html.Div([
                         #   dbc.Button("Punto Negativo", id="btn-negative", color="danger", outline=True),
                         #], size="lg", style={"width": "100%"}),
 
-                        dbc.ButtonGroup([
-                            dbc.Button("Download image", id="download-image-button", color="secondary"),
-                            dbc.Button("Download mask bitmap", id="download-mask-button", color="secondary"), 
-                            dbc.Button("Try segmentation", id="segment-button"),
-                        ], size="lg", style={"width": "100%"}),
+                        dbc.Row([
+                            dbc.Col([
+                                dbc.Button("Download image", id="download-image-button", color="secondary", className="me-2", style={"whiteSpace": "nowrap"}),
+                                dbc.Button("Download mask bitmap", id="download-mask-button", color="secondary", style={"whiteSpace": "nowrap"}),    
+                            ], width="auto"),
+                            dbc.Col(width=True),
+                            dbc.Col(
+                                dbc.Button("Try segmentation", id="segment-button", color="primary", style={"whiteSpace": "nowrap"}),
+                                width="auto"
+                            )                         
+                        ], align="center"),
+                        
 
                         dcc.Download(id="download-mask"), 
 
@@ -110,12 +114,22 @@ app.layout = html.Div([
                 dbc.Card([
                     dbc.CardHeader("Tools"),
                     dbc.CardFooter([
-                        dbc.ButtonGroup([
-                            dbc.Button("Punt Positiu", id="btn-positive", color="success", outline=True),
-                            dbc.Button("Punt Negatiu", id="btn-negative", color="danger", outline=True),
-                            dbc.Button("Clean All", id="btn-clean", color="secondary", outline=True),
-                        ], size="lg", style={"width": "100%"}
-                        ),
+                        dbc.Row([
+                            dbc.Col(
+                                dbc.ButtonGroup([
+                                    dbc.Button("Punt Positiu", id="btn-positive", color="success", outline=True),
+                                    dbc.Button("Punt Negatiu", id="btn-negative", color="danger", outline=True),
+                            
+                                ], style={"width": "100%"}
+                                ),
+                                width="auto"
+                            ),
+                            dbc.Col(width=True),
+                            dbc.Col(
+                                dbc.Button("Clean All", id="btn-clean", color="secondary", outline=True),
+                                width="auto"
+                            ),
+                        ]),
 
                         dcc.Checklist(
                             id='checklist',
