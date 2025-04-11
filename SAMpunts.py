@@ -48,6 +48,10 @@ app.layout = html.Div([
                                 width="auto"
                             ),
                             dbc.Col(
+                                dbc.Button('Save Current Segmentation', id='save-segmentation-button', color="success", outline=True),
+                                width="auto"
+                            ),
+                            dbc.Col(
                                 dbc.Button('Overwrite Image', id='overwrite-image-button', color="danger", outline=True),
                                 width="auto"
                             ),
@@ -60,6 +64,7 @@ app.layout = html.Div([
                         dcc.Store(id='points-data', data={'x': [], 'y': [], 'color': []}),  # Almacena puntos
                         dcc.Store(id='button-state', data={"positive": False, "negative": False}),
                         dcc.Store(id='mask-bitmap', data=None), 
+                        dcc.Store(id='segmentation-gallery', data=[]),
 
                         dcc.Loading(
                             id="segmentations-loading",
@@ -129,7 +134,11 @@ app.layout = html.Div([
                             tooltip={"placement": "bottom", "always_visible": True},
                         )
                     ])
-                ])
+                ]),
+                dbc.Card([
+                    dbc.CardHeader("Segmentations Gallery"),
+                    dbc.CardBody(id="segmentations-thumbnails")
+                    ])
             ], md=4),
                     
         ]),
@@ -348,7 +357,44 @@ def update_graph(stored_data, points_data, color_value, line_width, is_loading):
     return fig
 
 
-# Nuevo callback para descargar la máscara
+# Callback para guardar segmentaciones en la galería
+@app.callback(
+    Output('segmentation-gallery', 'data'),
+    Input('save-segmentation-button', 'n_clicks'),
+    State('mask-bitmap', 'data'),
+    State('segmentation-gallery', 'data'),
+    prevent_initial_call=True
+)
+def save_current_segmentation(n_clicks, mask_data, gallery):
+    if mask_data is None:
+        return gallery
+
+    mask_array = np.array(mask_data, dtype=np.uint8) * 255
+    img = Image.fromarray(mask_array)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    base64_img = base64.b64encode(buf.getvalue()).decode('utf-8')
+
+    gallery.append(f"data:image/png;base64,{base64_img}")
+    return gallery
+
+
+# Callback para mostrar los thumbnails
+@app.callback(
+    Output('segmentations-thumbnails', 'children'),
+    Input('segmentation-gallery', 'data')
+)
+def update_thumbnail_gallery(gallery):
+    if not gallery:
+        return html.P("No saved segmentations yet.")
+    
+    return html.Div([
+        html.Img(src=img_src, style={"height": "100px", "margin": "5px", "border": "1px solid #ccc"})
+        for img_src in gallery
+    ], style={"display": "flex", "flexWrap": "wrap"})
+
+
+# Callback para descargar la máscara
 @app.callback(
     Output('download-mask', 'data'),
     Input('download-mask-button', 'n_clicks'),
