@@ -152,11 +152,7 @@ app.layout = html.Div([
                     dbc.Col(
                         dbc.Button("Descargar", id="download-selected-mask-button", color="primary", className="me-2"),
                         width="auto"
-                    ),
-                    dbc.Col(
-                        dbc.Button("Cerrar", id="close-modal", className="ml-auto"),
-                        width="auto"
-                    ),
+                    )
                 ])
             ),
         ],
@@ -430,21 +426,17 @@ def update_thumbnail_gallery(gallery):
     Output("enlarged-segmentation", "src"),
     Output("selected-mask", "data"), 
     Input({'type': 'thumbnail', 'index': ALL}, 'n_clicks'),
-    Input("close-modal", "n_clicks"),
     State('segmentation-gallery', 'data'),
     State("modal-segmentation", "is_open"),
     prevent_initial_call=True
 )
-def toggle_modal(thumbnail_clicks, close_click, gallery, is_open):
+def toggle_modal(thumbnail_clicks, gallery, is_open):
     ctx_id = ctx.triggered_id
 
     if isinstance(ctx_id, dict) and ctx_id.get("type") == "thumbnail":
         clicked_index = ctx_id.get("index")
         if gallery and 0 <= clicked_index < len(gallery) and thumbnail_clicks[clicked_index] > 0:
             return True, gallery[clicked_index], gallery[clicked_index]
-
-    elif ctx_id == "close-modal":
-        return False, dash.no_update, dash.no_update
 
     return is_open, dash.no_update, dash.no_update
 
