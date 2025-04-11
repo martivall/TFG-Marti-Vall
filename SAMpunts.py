@@ -88,7 +88,7 @@ app.layout = html.Div([
                         #], size="lg", style={"width": "100%"}),
 
                         dbc.ButtonGroup([
-                            dbc.Button("Download classified image", id="download-image-button", color="secondary"),
+                            dbc.Button("Download image", id="download-image-button", color="secondary"),
                             dbc.Button("Download mask bitmap", id="download-mask-button", color="secondary"), 
                             dbc.Button("Try segmentation", id="segment-button"),
                         ], size="lg", style={"width": "100%"}),
@@ -222,7 +222,6 @@ def update_stored_figure(nclicks, content, relayout_data, points_data, check):
             fig = parse_segmentation(content)
             mask = None
     elif ctx.triggered_id == "points-data":
-        print(check)
         if check == ['Recàlcul automàtic']:
             if not points_data["x"]:  
                 fig = parse_contents(content)
@@ -322,7 +321,6 @@ def update_points(clickData, clean_click, button_state, points_data):
 )
 def update_graph(stored_data, points_data, color_value, line_width, is_loading):
     if not stored_data or is_loading:
-        print("nodata")
         return dash.no_update
 
     fig = go.Figure(stored_data)
@@ -349,33 +347,6 @@ def update_graph(stored_data, points_data, color_value, line_width, is_loading):
 
     return fig
 
-"""
-@app.callback(
-    Output("output-image-upload", "figure", allow_duplicate=True),
-    State("stored-figure", "data"),
-    Input("color-picker", "value"),  # Leer el color directamente
-    Input("line-width-slider", "value"),  # Leer el grosor directamente
-    prevent_initial_call=True
-)
-def update_draw_color(stored_data, color_value, line_width):
-    print(color_value)
-    if not stored_data:
-        return dash.no_update
-    print('stored data')
-    fig = go.Figure(stored_data)
-
-    # Configuración por defecto del dibujo de líneas
-    fig.update_layout(
-        newshape=dict(
-            line=dict(
-                color=color_value["hex"],  # Color del trazo
-                width=line_width  # Grosor del trazo
-            )
-        )
-    )
-
-    return fig
-"""
 
 # Nuevo callback para descargar la máscara
 @app.callback(
