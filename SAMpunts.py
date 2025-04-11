@@ -8,6 +8,7 @@ from dash.dependencies import Input, Output, State
 from dash_canvas.utils import array_to_data_url, image_string_to_PILImage
 import dash_daq as daq  # Importar Dash DAQ
 from skimage import io
+from PIL import Image
 import dash_bootstrap_components as dbc
 import base64
 import io
@@ -58,6 +59,7 @@ app.layout = html.Div([
                         dcc.Store(id='loading-flag', data=False),  # Estado de carga
                         dcc.Store(id='points-data', data={'x': [], 'y': [], 'color': []}),  # Almacena puntos
                         dcc.Store(id='button-state', data={"positive": False, "negative": False}),
+                        dcc.Store(id='mask-bitmap', data=None), 
 
                         dcc.Loading(
                             id="segmentations-loading",
@@ -87,10 +89,13 @@ app.layout = html.Div([
 
                         dbc.ButtonGroup([
                             dbc.Button("Download classified image", id="download-image-button", color="secondary"),
+                            dbc.Button("Download mask bitmap", id="download-mask-button", color="secondary"), 
                             dbc.Button("Try segmentation", id="segment-button"),
                         ], size="lg", style={"width": "100%"}),
 
-                         dcc.Download(id="download-image"),
+                        dcc.Download(id="download-mask"), 
+
+                        dcc.Download(id="download-image"),
                     ]),
                 ])
             ], md=8),
@@ -163,7 +168,6 @@ def parse_box_segmentation(contents, box, input_points, input_labels):
     if input_points.size == 0:
         masks, scores, logits = mask_predictor.predict(box=box, multimask_output=False)
     elif box.size == 0:
-        print("box buida")
         masks, scores, logits = mask_predictor.predict(point_coords=input_points, point_labels=input_labels, multimask_output=False)
         # print(input_points)
         # print(input_labels)
@@ -175,17 +179,19 @@ def parse_box_segmentation(contents, box, input_points, input_labels):
     mask_annotator = sv.MaskAnnotator(color=sv.Color.RED, color_lookup=sv.ColorLookup.INDEX)
     detections = sv.Detections(xyxy=sv.mask_to_xyxy(masks=masks),mask=masks)
     detections = detections[detections.area == np.max(detections.area)]
+    mask = detections.mask[0] 
     segmented_image = mask_annotator.annotate(scene=pix.copy(), detections=detections)
     #segmented_image = box_annotator.annotate(scene=segmented_image.copy(), detections=detections)
     fig = px.imshow(segmented_image)
     fig.update_xaxes(showgrid=False, ticks= '', showticklabels=False, zeroline=False)
     fig.update_yaxes(showgrid=False, scaleanchor="x", ticks= '', showticklabels=False, zeroline=False)
     fig.update_layout(template=None,dragmode="select")
-    return fig
+    return fig, mask
 
 @app.callback(
     Output('stored-figure', 'data'),
     Output('loading-flag', 'data'),
+    Output('mask-bitmap', 'data'), 
     Input('segment-button', 'n_clicks'),
     Input('upload-image', 'contents'),
     State('output-image-upload', 'relayoutData'),
@@ -194,7 +200,7 @@ def parse_box_segmentation(contents, box, input_points, input_labels):
 )
 def update_stored_figure(nclicks, content, relayout_data, points_data, check):
     if content is None:
-        return {}, False
+        return {}, False, None
     if ctx.triggered_id == "segment-button":
         loading_flag = True
         if "shapes" in relayout_data:
@@ -211,14 +217,16 @@ def update_stored_figure(nclicks, content, relayout_data, points_data, check):
 
                     input_points = np.vstack((input_points, point))  
                     input_labels = np.append(input_labels, label)  
-            fig = parse_box_segmentation(content, box, input_points, input_labels)
+            fig, mask = parse_box_segmentation(content, box, input_points, input_labels)
         else:    
             fig = parse_segmentation(content)
+            mask = None
     elif ctx.triggered_id == "points-data":
         print(check)
         if check == ['Recàlcul automàtic']:
             if not points_data["x"]:  
                 fig = parse_contents(content)
+                return fig.to_dict(), False, None
             else:
                 box = np.array([])
                 input_points = np.empty((0, 2), dtype=int)  # Array vacío con forma (N,2) para coordenadas
@@ -228,17 +236,18 @@ def update_stored_figure(nclicks, content, relayout_data, points_data, check):
                     label = np.array(int(color))  # Convertir color a entero (0 o 1)
                     input_points = np.vstack((input_points, point))  
                     input_labels = np.append(input_labels, label)  
-                fig = parse_box_segmentation(content, box, input_points, input_labels)
+                fig, mask = parse_box_segmentation(content, box, input_points, input_labels)
         else:
             fig = parse_contents(content)
+            mask = None
     elif ctx.triggered_id == "upload-image":
-        print("Hello upload")
         is_loading = True
         fig = parse_contents(content)
+        mask = None
     else:
-        print("else")
-        return {}, False
-    return fig.to_dict(), False
+        return {}, False, None
+    return fig.to_dict(), False, mask.tolist() if mask is not None else None
+
 
 @app.callback(
     Output("button-state", "data"),
@@ -367,6 +376,27 @@ def update_draw_color(stored_data, color_value, line_width):
 
     return fig
 """
+
+# Nuevo callback para descargar la máscara
+@app.callback(
+    Output('download-mask', 'data'),
+    Input('download-mask-button', 'n_clicks'),
+    State('mask-bitmap', 'data'),
+    prevent_initial_call=True
+)
+def download_mask(n_clicks, mask_data):
+    if mask_data is None:
+        return dash.no_update
+
+    mask_array = np.array(mask_data, dtype=np.uint8) * 255
+    img = Image.fromarray(mask_array)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+
+    return dcc.send_bytes(buf.read(), filename="mask_bitmap.png")
+
+
 # Callback para descargar la imagen
 @app.callback(
     Output('download-image', 'data'),
