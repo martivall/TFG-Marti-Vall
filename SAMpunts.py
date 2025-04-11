@@ -291,8 +291,9 @@ def update_stored_figure(nclicks, content, relayout_data, points_data, check):
 
             # Generar figura con la mejor máscara
             mask_annotator = sv.MaskAnnotator(color=sv.Color.RED, color_lookup=sv.ColorLookup.INDEX)
-            detections = sv.Detections(xyxy=sv.mask_to_xyxy(masks=masks), mask=masks)
-            detections = detections[detections.area == np.max(detections.area)]
+            #detections = sv.Detections(xyxy=sv.mask_to_xyxy(masks=masks), mask=masks)
+            #detections = detections[detections.area == np.max(detections.area)]
+            detections = sv.Detections(xyxy=sv.mask_to_xyxy(masks=np.expand_dims(selected_mask, axis=0)), mask=np.expand_dims(selected_mask, axis=0))
             segmented_image = mask_annotator.annotate(scene=np.array(image_string_to_PILImage(content)), detections=detections)
 
             fig = px.imshow(segmented_image)
@@ -318,8 +319,9 @@ def update_stored_figure(nclicks, content, relayout_data, points_data, check):
                 selected_mask = masks[np.argmax(scores)]
 
                 mask_annotator = sv.MaskAnnotator(color=sv.Color.RED, color_lookup=sv.ColorLookup.INDEX)
-                detections = sv.Detections(xyxy=sv.mask_to_xyxy(masks=masks), mask=masks)
-                detections = detections[detections.area == np.max(detections.area)]
+                #detections = sv.Detections(xyxy=sv.mask_to_xyxy(masks=masks), mask=masks)
+                #detections = detections[detections.area == np.max(detections.area)]
+                detections = sv.Detections(xyxy=sv.mask_to_xyxy(masks=np.expand_dims(selected_mask, axis=0)), mask=np.expand_dims(selected_mask, axis=0))
                 segmented_image = mask_annotator.annotate(scene=np.array(image_string_to_PILImage(content)), detections=detections)
 
                 fig = px.imshow(segmented_image)
