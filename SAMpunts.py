@@ -50,8 +50,8 @@ app.layout = html.Div([
                             ),
                             dbc.Col(width=True),
                             dbc.Col([
-                                dbc.Button('Save Current Segmentation', id='save-segmentation-button', color="success", className="me-2", outline=True),
-                                dbc.Button('Overwrite Image', id='overwrite-image-button', color="danger", outline=True),
+                                dbc.Button('Save Current Segmentation', id='save-segmentation-button', color="primary", className="me-2", outline=True),
+                                dbc.Button('Overwrite Image', id='overwrite-image-button', color="primary", outline=True),
                             ], width="auto"),
                         ], align="center")
                     ),
