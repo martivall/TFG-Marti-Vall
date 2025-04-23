@@ -158,8 +158,23 @@ app.layout = html.Div([
                 ]),
                 dbc.Card([
                     dbc.CardHeader("Segmentations Gallery"),
-                    dbc.CardBody(id="segmentations-thumbnails")
+                    dbc.CardBody([
+                        html.Div(id="segmentations-thumbnails"),
+                        html.Div([
+                            html.Label("Operación lógica entre máscaras:"),
+                            dcc.Dropdown(
+                                id="mask-operation-type",
+                                options=[
+                                    {"label": "Unión", "value": "union"},
+                                    {"label": "Intersección", "value": "intersect"},
+                                    {"label": "Diferencia simétrica", "value": "diff"}
+                                ],
+                                placeholder="Selecciona una operación"
+                            ),
+                            dbc.Button("Aplicar operación", id="apply-mask-operation", color="primary", className="mt-2")
+                        ])
                     ])
+                ])
             ], md=4),
                     
         ]),
@@ -473,22 +488,62 @@ def update_graph(stored_data, points_data, color_value, line_width, is_loading):
 @app.callback(
     Output('segmentation-gallery', 'data'),
     Input('save-segmentation-button', 'n_clicks'),
+    Input('apply-mask-operation', 'n_clicks'),
     State('mask-bitmap', 'data'),
     State('segmentation-gallery', 'data'),
+    State({'type': 'mask-checkbox', 'index': ALL}, 'value'),
+    State('mask-operation-type', 'value'),
     prevent_initial_call=True
 )
-def save_current_segmentation(n_clicks, mask_data, gallery):
-    if mask_data is None:
+def update_segmentation_gallery(save_click, apply_click, mask_data, gallery, selected_checklists, operation):
+    triggered = ctx.triggered_id
+
+    if triggered == "save-segmentation-button":
+        if mask_data is None:
+            return dash.no_update
+
+        mask_array = np.array(mask_data, dtype=np.uint8) * 255
+        img = Image.fromarray(mask_array)
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        base64_img = base64.b64encode(buf.getvalue()).decode('utf-8')
+        gallery.append(f"data:image/png;base64,{base64_img}")
         return gallery
 
-    mask_array = np.array(mask_data, dtype=np.uint8) * 255
-    img = Image.fromarray(mask_array)
-    buf = io.BytesIO()
-    img.save(buf, format="PNG")
-    base64_img = base64.b64encode(buf.getvalue()).decode('utf-8')
+    elif triggered == "apply-mask-operation":
+        if not operation:
+            return dash.no_update
 
-    gallery.append(f"data:image/png;base64,{base64_img}")
-    return gallery
+        selected_indices = [i for checklist in selected_checklists for i in checklist]
+        if len(selected_indices) < 2:
+            return dash.no_update
+
+        masks = []
+        for i in selected_indices:
+            base64_img = gallery[i]
+            header, data = base64_img.split(",", 1)
+            img_bytes = base64.b64decode(data)
+            img = Image.open(io.BytesIO(img_bytes)).convert("L")
+            mask = np.array(img) > 127
+            masks.append(mask)
+
+        result = masks[0]
+        for mask in masks[1:]:
+            if operation == "union":
+                result = np.logical_or(result, mask)
+            elif operation == "intersect":
+                result = np.logical_and(result, mask)
+            elif operation == "diff":
+                result = np.logical_xor(result, mask)
+
+        result_img = Image.fromarray((result.astype(np.uint8) * 255))
+        buf = io.BytesIO()
+        result_img.save(buf, format="PNG")
+        result_base64 = base64.b64encode(buf.getvalue()).decode("utf-8")
+        gallery.append(f"data:image/png;base64,{result_base64}")
+        return gallery
+
+    return dash.no_update
 
 
 # Callback para mostrar los thumbnails
@@ -501,14 +556,22 @@ def update_thumbnail_gallery(gallery):
         return html.P("No saved segmentations yet.")
     
     return html.Div([
-        html.Img(
-            src=img_src,
-            id={'type': 'thumbnail', 'index': i},
-            n_clicks=0,
-            style={"height": "100px", "margin": "5px", "border": "1px solid #ccc", "cursor": "pointer"}
-        )
+        html.Div([
+            dcc.Checklist(
+                options=[{'label': '', 'value': i}],
+                value=[],
+                id={'type': 'mask-checkbox', 'index': i},
+                inputStyle={"marginRight": "5px"}
+            ),
+            html.Img(
+                src=img_src,
+                id={'type': 'thumbnail', 'index': i},
+                n_clicks=0,
+                style={"height": "100px", "margin": "5px", "border": "1px solid #ccc", "cursor": "pointer"}
+            )
+        ], style={"display": "inline-block", "textAlign": "center"})
         for i, img_src in enumerate(gallery)
-    ], style={"display": "flex", "flexWrap": "wrap"})
+    ])
 
 
 # Callback para abrir el modal con la imagen clicada
