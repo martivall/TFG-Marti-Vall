@@ -549,17 +549,20 @@ def update_segmentation_gallery(save_click, apply_click, mask_data, gallery, sel
 # Callback para mostrar los thumbnails
 @app.callback(
     Output('segmentations-thumbnails', 'children'),
-    Input('segmentation-gallery', 'data')
+    Input('segmentation-gallery', 'data'),
+    Input({'type': 'mask-checkbox', 'index': ALL}, 'value')
 )
-def update_thumbnail_gallery(gallery):
+def update_thumbnail_gallery(gallery, checklist_values):
     if not gallery:
         return html.P("No saved segmentations yet.")
+    
+    selected_indices = set(i for checklist in checklist_values for i in checklist)
     
     return html.Div([
         html.Div([
             dcc.Checklist(
                 options=[{'label': '', 'value': i}],
-                value=[],
+                value=[i] if i in selected_indices else [],
                 id={'type': 'mask-checkbox', 'index': i},
                 inputStyle={"marginRight": "5px"}
             ),
@@ -567,7 +570,11 @@ def update_thumbnail_gallery(gallery):
                 src=img_src,
                 id={'type': 'thumbnail', 'index': i},
                 n_clicks=0,
-                style={"height": "100px", "margin": "5px", "border": "1px solid #ccc", "cursor": "pointer"}
+                style={
+                    "height": "100px", 
+                    "margin": "5px", 
+                    "border": "1px solid #ccc" if i not in selected_indices else "3px solid #007BFF", 
+                    "cursor": "pointer"}
             )
         ], style={"display": "inline-block", "textAlign": "center"})
         for i, img_src in enumerate(gallery)
